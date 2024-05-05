@@ -1,0 +1,30 @@
+// Arduino code for voltage sensor and communication with Unity
+
+const int analogPin = A0; // Analog pin connected to the voltage sensor
+const float referenceVoltage = 50.0; // Supply voltage
+
+void setup() 
+{
+  Serial.begin(9600); // Initialize serial communication
+}
+
+void loop() 
+{
+  // Read voltage from the sensor
+  int sensorValue = analogRead(analogPin);
+  
+  // Convert analog value to voltage (0-30V)
+  float voltage = (sensorValue / 1023.0) * referenceVoltage;
+  
+  // Calculate power (P = V^2 / R, where R is the sensor resistance)
+  float resistance = 6.0; // Adjust based on your sensor specs
+  float power = (voltage * voltage) / resistance;
+  
+  // Send voltage and power data to Unity
+  Serial.print("VOLTAGE:");
+  Serial.print(voltage, 2); // Print voltage with 2 decimal places
+  Serial.print(", POWER:");
+  Serial.println(power, 2); // Print power with 2 decimal places
+  
+  delay(1000); // Adjust the delay as needed
+}
