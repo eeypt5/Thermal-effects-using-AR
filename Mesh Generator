@@ -1,0 +1,179 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using System.IO;
+using Unity.Collections;
+using UnityEngine.Rendering;
+using System.Runtime.InteropServices;
+using System.Threading;
+
+[RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
+public class MeshGenerator : MonoBehaviour
+{
+    Mesh mesh;
+    Vector3[] vertices;
+    List<int> triangles;
+    Color[] colors;
+    Vector2[] uvs;
+
+    public Gradient gradient;
+    public MeshRenderer meshRenderer;
+    public MatrixSolver matrixSolver;
+
+    public double P { get; set; } = 0;
+
+    struct Cell
+    {
+        public int n0, n1, n2, n3, n4, n5, n6, n7;
+    }
+
+    struct Face
+    {
+        public int n0, n1, n2, n3;
+    }
+
+
+    void Start()
+    {
+        mesh = new Mesh { name = "Procedural Mesh" };
+        GetComponent<MeshFilter>().mesh = mesh;
+        matrixSolver = FindObjectOfType<MatrixSolver>();  // Initialize MatrixSolver Reference
+        QualitySettings.vSyncCount = 0;  // Control Frame rate
+        CreateShape();
+    }
+
+    void CreateShape()
+    {
+        string nodeFilePath = Application.dataPath + "/Test_node3.txt";  // node text file
+        vertices = ReadNodeData(nodeFilePath);
+        Debug.Log($"Total vertices read: {vertices.Length}");
+
+        string cellFilePath = Application.dataPath + "/test_cell.txt";  // cell text file
+        string[] linesCell = File.ReadAllLines(cellFilePath);
+
+        triangles = new List<int>();
+
+        foreach (string line in linesCell)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            Cell cell = ReadCell(line);
+            for (int i = 0; i < 6; i++)  // Assuming 6 faces per cell (cube)
+            {
+                Face face = GetFace(cell, i);
+                if (ValidateFace(face, vertices.Length))
+                {
+                    triangles.AddRange(CreateTriangles(face));
+                }
+                else
+                {
+                    Debug.LogError($"Face {i} in line '{line}' contains out-of-bounds indices. Indices: {face.n0}, {face.n1}, {face.n2}, {face.n3}");
+                }
+            }
+        }
+
+        uvs = new Vector2[2376];
+        colors = new Color[2376];
+
+        for (int i = 0; i < 2376; i++)
+        {
+            int j = i / 4;
+            uvs[i] = new Vector2((float)j / 10, 0.5f);
+        }
+
+        mesh.vertices = vertices;
+        mesh.triangles = triangles.ToArray();
+        mesh.RecalculateNormals();
+    }
+
+    Vector3[] ReadNodeData(string filePath)
+    {
+        string[] lines = File.ReadAllLines(filePath);
+        Vector3[] localVertices = new Vector3[lines.Length];
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string[] parts = lines[i].Split('\t');
+            float x = float.Parse(parts[0]);
+            float y = float.Parse(parts[1]);
+            float z = float.Parse(parts[2]);
+            localVertices[i] = new Vector3(x, y, z);
+        }
+        return localVertices;
+    }
+
+    Cell ReadCell(string line)
+    {
+        string[] parts = line.Split('\t');
+        return new Cell
+        {
+            n0 = int.Parse(parts[0]),
+            n1 = int.Parse(parts[1]),
+            n2 = int.Parse(parts[2]),
+            n3 = int.Parse(parts[3]),
+            n4 = int.Parse(parts[4]),
+            n5 = int.Parse(parts[5]),
+            n6 = int.Parse(parts[6]),
+            n7 = int.Parse(parts[7])
+        };
+    }
+
+    bool ValidateFace(Face face, int vertexCount)
+    {
+        return face.n0 < vertexCount && face.n1 < vertexCount &&
+               face.n2 < vertexCount && face.n3 < vertexCount &&
+               face.n0 >= 0 && face.n1 >= 0 && face.n2 >= 0 && face.n3 >= 0;
+    }
+
+    Face GetFace(Cell cell, int faceIndex)
+    {
+        switch (faceIndex)
+        {
+            case 0: return new Face { n0 = cell.n0, n1 = cell.n1, n2 = cell.n5, n3 = cell.n4 }; // front face
+            case 1: return new Face { n0 = cell.n1, n1 = cell.n2, n2 = cell.n6, n3 = cell.n5 }; // right face
+            case 2: return new Face { n0 = cell.n2, n1 = cell.n3, n2 = cell.n7, n3 = cell.n6 }; // back face
+            case 3: return new Face { n0 = cell.n3, n1 = cell.n0, n2 = cell.n4, n3 = cell.n7 }; // left face
+            case 4: return new Face { n0 = cell.n4, n1 = cell.n5, n2 = cell.n6, n3 = cell.n7 }; // top face
+            case 5: return new Face { n0 = cell.n0, n1 = cell.n3, n2 = cell.n2, n3 = cell.n1 }; // bottom face
+            default: return new Face();
+        }
+    }
+
+    List<int> CreateTriangles(Face face)
+    {
+        return new List<int> { face.n0, face.n1, face.n3, face.n1, face.n2, face.n3 };
+    }
+
+    void UpdateMeshColor()
+    {
+        if (matrixSolver != null)
+        {
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                double temperature = matrixSolver.GetTemperature(i);    // Get temperature value
+                float t = Mathf.Clamp01((float)temperature / 100f);
+                Color color = gradient.Evaluate(t);
+                colors[i] = color;  // Update color
+            }
+            mesh.colors = colors;   // Update mesh colors
+        }
+    }
+
+    void Update()
+    {
+        //P += 0.01;
+        //if (P > 25) P = 0;
+        matrixSolver.Solve(P);
+
+        mesh.Clear();
+
+        mesh.vertices = vertices;
+        mesh.triangles = triangles.ToArray();
+        mesh.colors = colors;
+        mesh.uv = uvs;
+
+        UpdateMeshColor();
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+    }
+}
