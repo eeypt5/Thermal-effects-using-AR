@@ -1,0 +1,64 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using System.Runtime.InteropServices;
+using System;
+using System.IO;
+using System.Threading;
+
+public class MatrixSolver : MonoBehaviour
+{
+    [DllImport("MatrixSolver.dll")]
+    public static extern int test(int i);
+
+    [DllImport("MatrixSolver.dll")]
+    public static extern void solve([In, Out] IntPtr u, [In, Out] IntPtr T);
+
+    [DllImport("MatrixSolver.dll")]
+    public static extern double getDoubleArray([In] IntPtr m, long index);
+
+    [DllImport("MatrixSolver.dll")]
+    public static extern long getIntArray([In] IntPtr m, long index);
+
+    [DllImport("MatrixSolver.dll")]
+    public static extern void setDoubleArray([Out] IntPtr m, long index, double val);
+
+    [DllImport("MatrixSolver.dll")]
+    public static extern void setIntArray([Out] IntPtr m, long index, long val);
+
+    public IntPtr uPtr, TPtr;
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        // Allocate memory for input vector u
+        uPtr = Marshal.AllocHGlobal(2 * Marshal.SizeOf(typeof(double)));
+        // Allocate memory for output matrix T
+        TPtr = Marshal.AllocHGlobal(2376 * Marshal.SizeOf(typeof(double)));
+    }
+
+
+    public void Solve(double P)
+    {
+        // Test using solve()
+        // Set input vector values
+        setDoubleArray(uPtr, 0, 0);
+        setDoubleArray(uPtr, 1, P);
+
+        // Call solve() from DLL
+        solve(uPtr, TPtr);
+    }
+
+
+    public double GetTemperature(int i)
+    {
+        return getDoubleArray(TPtr, i);
+    }
+
+
+    // Update is called once per frame
+    void Update()
+    {
+        
+    }
+}
