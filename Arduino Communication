@@ -1,0 +1,97 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using System.IO.Ports;
+
+public class ArduinoCommu : MonoBehaviour
+{
+    SerialPort serialPort; // Arduino is connected to COM3, with 9600 baud rate
+    public string receivedstring;
+    public GameObject test_data;
+    public Rigidbody rb;
+    public float sensitivity = 0.01f;
+
+    public string[] datas;
+
+    public MatrixSolver matrixSolver;
+    public MeshGenerator meshGenerator;
+
+    public double P { get; set; } = 0;
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        // Initialize Mesh_Generator Reference
+        meshGenerator = GetComponent<MeshGenerator>();
+        // Initialize MatrixSolver Reference
+        matrixSolver = FindObjectOfType<MatrixSolver>();
+
+        serialPort = new SerialPort("COM3", 9600);
+        serialPort.Open(); // Open the serial port
+
+        if (serialPort.IsOpen)
+        {
+            Debug.Log("Port is open ");
+        }
+        else
+        {
+            Debug.Log("Port failed to open");
+        }
+
+    }
+
+    void OnDestroy()
+    {
+        // Close the serial port when the script is destroyed
+        if (serialPort != null && serialPort.IsOpen)
+        {
+            serialPort.Close();
+        }
+    }
+
+
+    // Update is called once per frame
+    void Update()
+    {
+        /*// Check if data is available to read
+        if (serialPort.BytesToRead > 0)
+        {
+            // Read the data from the serial port
+            string data = serialPort.ReadLine();
+
+            // Parse the data to extract the value of P
+            double P = double.Parse(data);
+
+            // Access the MeshGenerator component and set the P property
+            GetComponent<Mesh_Generator>().P = P;
+        }*/
+
+        if (serialPort.IsOpen && serialPort.BytesToRead > 0)
+        {
+            // Read the data from the serial port
+            receivedstring = serialPort.ReadLine();
+
+            Debug.Log("Recieved bytes");
+
+            string[] datas = receivedstring.Split(','); // split the data between ','
+
+            // Parse the data to extract the value of P
+            double P = double.Parse(datas[1]);
+            //matrixSolver.Solve(double.Parse(datas[1]));
+
+            // Access the MeshGenerator component and set the P property
+            GetComponent<MeshGenerator>().P = P;
+
+
+        }
+        else if (serialPort.IsOpen && serialPort.BytesToRead <= 0)
+        {
+            // Debug.Log("No vytes to read");
+
+        }
+        else if (!serialPort.IsOpen)
+        {
+            Debug.Log("Serial port closesd");
+        }
+    }
+}
